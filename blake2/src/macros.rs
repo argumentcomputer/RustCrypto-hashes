@@ -117,6 +117,7 @@ macro_rules! blake2_impl {
                     v[1] = (v[1] ^ v[2]).rotate_right_const(rb);
                 }
 
+                #[allow(dead_code)]
                 #[cfg_attr(not(feature = "size_opt"), inline(always))]
                 fn shuffle(v: &mut [$vec; 4]) {
                     v[1] = v[1].shuffle_left_1();
@@ -124,6 +125,7 @@ macro_rules! blake2_impl {
                     v[3] = v[3].shuffle_left_3();
                 }
 
+                #[allow(dead_code)]
                 #[cfg_attr(not(feature = "size_opt"), inline(always))]
                 fn unshuffle(v: &mut [$vec; 4]) {
                     v[1] = v[1].shuffle_right_1();
@@ -135,49 +137,23 @@ macro_rules! blake2_impl {
                 fn round(v: &mut [$vec; 4], m: &[$word; 16], s: &[usize; 16]) {
                     cfg_if::cfg_if! {
                         if #[cfg(all(target_os = "zkvm"))] {
-                            // TODO enforce usage on u32 words
-                            // TODO fix weird memory layout (if possible)
                             unsafe {
-                                //let mut a = [v[0].0, v[0].1, v[0].2, v[0].3, v[1].0, v[1].1, v[1].2, v[1].3, v[2].0, v[2].1, v[2].2, v[2].3, v[3].0, v[3].1, v[3].2, v[3].3];
                                 let m1 = $vec::gather(m, s[0], s[2], s[4], s[6]).from_le();
                                 let m2 = $vec::gather(m, s[1], s[3], s[5], s[7]).from_le();
-                                let b = [m1.0, m1.1, m1.2, m1.3, m2.0, m2.1, m2.2, m2.3, 0, 0, 0, 0, 0, 0, 0, 0];
-                                //syscall_blake2s_quarter_round_2x(a.as_mut_ptr() as *mut u32, b.as_ptr() as *const u32);
-                                //v[0] = $vec::new(a[0], a[1], a[2], a[3]);
-                                //v[1] = $vec::new(a[4], a[5], a[6], a[7]);
-                                //v[2] = $vec::new(a[8], a[9], a[10], a[11]);
-                                //v[3] = $vec::new(a[12], a[13], a[14], a[15]);
-                                syscall_blake2s_quarter_round_2x(&mut v[0].0 as *mut $word as *mut u32, b.as_ptr() as *const u32);
+                                let m3 = $vec::gather(m, s[8], s[10], s[12], s[14]).from_le();
+                                let m4 = $vec::gather(m, s[9], s[11], s[13], s[15]).from_le();
+                                let b = [m1.0, m1.1, m1.2, m1.3, m2.0, m2.1, m2.2, m2.3, m3.0, m3.1, m3.2, m3.3, m4.0, m4.1, m4.2, m4.3];
+                                syscall_blake2s_round(&mut v[0].0 as *mut $word as *mut u32, b.as_ptr() as *const u32);
                             }
                         } else {
                             quarter_round(v, $R1, $R2, $vec::gather(m, s[0], s[2], s[4], s[6]));
                             quarter_round(v, $R3, $R4, $vec::gather(m, s[1], s[3], s[5], s[7]));
-                        }
-                    }
-
-                    shuffle(v);
-
-                    cfg_if::cfg_if! {
-                        if #[cfg(all(target_os = "zkvm"))] {
-                            unsafe {
-                                //let mut a = [v[0].0, v[0].1, v[0].2, v[0].3, v[1].0, v[1].1, v[1].2, v[1].3, v[2].0, v[2].1, v[2].2, v[2].3, v[3].0, v[3].1, v[3].2, v[3].3];
-                                let m1 = $vec::gather(m, s[8], s[10], s[12], s[14]).from_le();
-                                let m2 = $vec::gather(m, s[9], s[11], s[13], s[15]).from_le();
-                                let b = [m1.0, m1.1, m1.2, m1.3, m2.0, m2.1, m2.2, m2.3, 0, 0, 0, 0, 0, 0, 0, 0];
-                                //syscall_blake2s_quarter_round_2x(a.as_mut_ptr() as *mut u32, b.as_ptr() as *const u32);
-                                //v[0] = $vec::new(a[0], a[1], a[2], a[3]);
-                                //v[1] = $vec::new(a[4], a[5], a[6], a[7]);
-                                //v[2] = $vec::new(a[8], a[9], a[10], a[11]);
-                                //v[3] = $vec::new(a[12], a[13], a[14], a[15]);
-                                syscall_blake2s_quarter_round_2x(&mut v[0].0 as *mut $word as *mut u32, b.as_ptr() as *const u32);
-                            }
-                        } else {
+                            shuffle(v);
                             quarter_round(v, $R1, $R2, $vec::gather(m, s[8], s[10], s[12], s[14]));
                             quarter_round(v, $R3, $R4, $vec::gather(m, s[9], s[11], s[13], s[15]));
+                            unshuffle(v);
                         }
                     }
-
-                    unshuffle(v);
                 }
 
                 let mut m: [$word; 16] = Default::default();
