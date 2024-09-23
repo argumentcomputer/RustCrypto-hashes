@@ -33,6 +33,13 @@ macro_rules! blake2_impl {
             ) -> Self {
                 assert!(key_size <= $bytes::to_usize());
                 assert!(output_size <= $bytes::to_usize());
+                 cfg_if::cfg_if! {
+                    if #[cfg(all(target_os = "zkvm"))] {
+                        // We prevent running something which is not a Blake2s inside Sphinx zkvm,
+                        // because we use Blake2s specific syscalls below
+                        assert!($alg_name == "Blake2s", "something not a Blake2s in zkvm!");
+                    }
+                }
 
                 // The number of bytes needed to express two words.
                 let length = $bytes::to_usize() / 4;
